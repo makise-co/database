@@ -1,13 +1,9 @@
 {
     "name": "makise-co/database",
-    "description": "Swoole Connection Pool",
+    "description": "Database PHP Drivers common presets for Swoole",
     "type": "library",
     "license": "MIT",
-    "keywords": [
-        "swoole",
-        "connection",
-        "pool"
-    ],
+    "keywords": [],
     "authors": [
         {
             "name": "Dmitry K.",
