@@ -8,9 +8,9 @@
 
 declare(strict_types=1);
 
-namespace MakiseCo\Database\Contracts;
+namespace MakiseCo\SqlCommon\Contracts;
 
-use MakiseCo\Database\Exception;
+use MakiseCo\SqlCommon\Exception;
 use MakiseCo\Connection\TransientResource;
 
 interface Executor extends TransientResource

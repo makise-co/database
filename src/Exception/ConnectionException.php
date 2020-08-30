@@ -8,7 +8,7 @@
 
 declare(strict_types=1);
 
-namespace MakiseCo\Database\Exception;
+namespace MakiseCo\SqlCommon\Exception;
 
 class ConnectionException extends FailureException
 {

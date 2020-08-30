@@ -1,5 +1,5 @@
 {
-    "name": "makise-co/database",
+    "name": "makise-co/sql-common",
     "description": "Database PHP Drivers common presets for Swoole",
     "type": "library",
     "license": "MIT",
@@ -19,7 +19,7 @@
     },
     "autoload": {
         "psr-4": {
-            "MakiseCo\\Database\\": "src/"
+            "MakiseCo\\SqlCommon\\": "src/"
         }
     },
     "require-dev": {

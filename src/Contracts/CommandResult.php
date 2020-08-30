@@ -8,7 +8,7 @@
 
 declare(strict_types=1);
 
-namespace MakiseCo\Database\Contracts;
+namespace MakiseCo\SqlCommon\Contracts;
 
 interface CommandResult
 {

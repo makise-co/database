@@ -8,11 +8,11 @@
 
 declare(strict_types=1);
 
-namespace MakiseCo\Database;
+namespace MakiseCo\SqlCommon;
 
 use stdClass;
 use Closure;
-use MakiseCo\Database\Contracts\ResultSet;
+use MakiseCo\SqlCommon\Contracts\ResultSet;
 
 class PooledResultSet implements ResultSet
 {

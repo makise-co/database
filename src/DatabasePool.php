@@ -8,17 +8,17 @@
 
 declare(strict_types=1);
 
-namespace MakiseCo\Database;
+namespace MakiseCo\SqlCommon;
 
 use Closure;
 use MakiseCo\Connection\ConnectionConfigInterface;
 use MakiseCo\Connection\ConnectionInterface;
 use MakiseCo\Connection\ConnectorInterface;
-use MakiseCo\Database\Contracts\CommandResult;
-use MakiseCo\Database\Contracts\Link;
-use MakiseCo\Database\Contracts\ResultSet;
-use MakiseCo\Database\Contracts\Statement;
-use MakiseCo\Database\Contracts\Transaction;
+use MakiseCo\SqlCommon\Contracts\CommandResult;
+use MakiseCo\SqlCommon\Contracts\Link;
+use MakiseCo\SqlCommon\Contracts\ResultSet;
+use MakiseCo\SqlCommon\Contracts\Statement;
+use MakiseCo\SqlCommon\Contracts\Transaction;
 use MakiseCo\Pool\Pool;
 use Throwable;
 use InvalidArgumentException;
@@ -52,6 +52,8 @@ abstract class DatabasePool extends Pool implements Link
         $this->pop = Closure::fromCallable([$this, 'pop']);
         $this->push = Closure::fromCallable([$this, 'push']);
     }
+
+    abstract protected function createTransaction(Transaction $transaction, Closure $release): Transaction;
 
     public function getStatementMaxIdleTime(): int
     {
@@ -157,7 +159,7 @@ abstract class DatabasePool extends Pool implements Link
             throw $e;
         }
 
-        return new PooledTransaction($transaction, function () use ($connection) {
+        return $this->createTransaction($transaction, function () use ($connection) {
             $this->push($connection);
         });
     }

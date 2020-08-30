@@ -8,15 +8,15 @@
 
 declare(strict_types=1);
 
-namespace MakiseCo\Database;
+namespace MakiseCo\SqlCommon;
 
 use Closure;
-use MakiseCo\Database\Exception\TransactionError;
-use MakiseCo\Database\Contracts\Transaction;
-use MakiseCo\Database\Contracts\ResultSet;
-use MakiseCo\Database\Contracts\CommandResult;
+use MakiseCo\SqlCommon\Exception\TransactionError;
+use MakiseCo\SqlCommon\Contracts\Transaction;
+use MakiseCo\SqlCommon\Contracts\ResultSet;
+use MakiseCo\SqlCommon\Contracts\CommandResult;
 
-class PooledTransaction implements Transaction
+abstract class PooledTransaction implements Transaction
 {
     private ?Transaction $transaction;
     private Closure $release;
@@ -232,29 +232,5 @@ class PooledTransaction implements Transaction
         }
 
         return $this->transaction->releaseSavepoint($identifier);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function quoteString(string $data): string
-    {
-        if ($this->transaction === null) {
-            throw new TransactionError("The transaction has been committed or rolled back");
-        }
-
-        return $this->transaction->quoteString($data);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function quoteName(string $name): string
-    {
-        if ($this->transaction === null) {
-            throw new TransactionError("The transaction has been committed or rolled back");
-        }
-
-        return $this->transaction->quoteName($name);
     }
 }

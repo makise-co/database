@@ -8,9 +8,10 @@
 
 declare(strict_types=1);
 
-namespace MakiseCo\Database\Contracts;
+namespace MakiseCo\SqlCommon\Contracts;
 
 use MakiseCo\Connection\ConnectionInterface;
+use MakiseCo\SqlCommon\Exception;
 
 interface Link extends Executor, ConnectionInterface
 {
@@ -20,6 +21,9 @@ interface Link extends Executor, ConnectionInterface
      * @param int $isolation Transaction isolation level.
      *
      * @return Transaction
+     *
+     * @throws Exception\FailureException If the operation fails due to unexpected condition.
+     * @throws Exception\ConnectionException If the connection to the database is lost.
      */
     public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction;
 }

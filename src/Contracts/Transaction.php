@@ -8,11 +8,11 @@
 
 declare(strict_types=1);
 
-namespace MakiseCo\Database\Contracts;
+namespace MakiseCo\SqlCommon\Contracts;
 
-use MakiseCo\Database\Exception;
+use MakiseCo\SqlCommon\Exception;
 
-interface Transaction extends Executor, Quoter
+interface Transaction extends Executor
 {
     public const ISOLATION_UNCOMMITTED  = 0;
     public const ISOLATION_COMMITTED    = 1;

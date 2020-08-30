@@ -8,12 +8,12 @@
 
 declare(strict_types=1);
 
-namespace MakiseCo\Database;
+namespace MakiseCo\SqlCommon;
 
 use Closure;
-use MakiseCo\Database\Contracts\ResultSet;
-use MakiseCo\Database\Contracts\Statement;
-use MakiseCo\Database\Exception\FailureException;
+use MakiseCo\SqlCommon\Contracts\ResultSet;
+use MakiseCo\SqlCommon\Contracts\Statement;
+use MakiseCo\SqlCommon\Exception\FailureException;
 
 final class PooledStatement implements Statement
 {
