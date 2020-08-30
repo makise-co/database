@@ -1,0 +1,8 @@
+parameters:
+    level: 8
+    checkMissingIterableValueType: false
+    paths:
+        - src
+        - tests
+    stubFiles:
+        - vendor/makise-co/pool/stubs/SplObjectStorage.stub

@@ -1,0 +1,34 @@
+{
+    "name": "makise-co/database",
+    "description": "Swoole Connection Pool",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "swoole",
+        "connection",
+        "pool"
+    ],
+    "authors": [
+        {
+            "name": "Dmitry K.",
+            "email": "coder1994@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require": {
+        "php": ">=7.4",
+        "makise-co/connection": "^1.0",
+        "makise-co/pool": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "MakiseCo\\Database\\": "src/"
+        }
+    },
+    "require-dev": {
+        "swoole/ide-helper": "^4.5",
+        "phpstan/phpstan": "^0.12.40",
+        "phpunit/phpunit": "^9.3"
+    }
+}
