@@ -11,6 +11,7 @@ declare(strict_types=1);
 namespace MakiseCo\SqlCommon;
 
 use Closure;
+use MakiseCo\SqlCommon\Exception\FailureException;
 use MakiseCo\SqlCommon\Exception\TransactionError;
 use MakiseCo\SqlCommon\Contracts\Transaction;
 use MakiseCo\SqlCommon\Contracts\ResultSet;
@@ -24,21 +25,20 @@ abstract class PooledTransaction implements Transaction
 
     public function __construct(Transaction $transaction, Closure $release)
     {
-        $this->release = $release;
-
         if (!$transaction->isActive()) {
             $release();
-            $this->transaction = null;
-        } else {
-            $this->transaction = $transaction;
 
-            $refCount = &$this->refCount;
-            $this->release = static function () use (&$refCount, $release) {
-                if (--$refCount === 0) {
-                    $release();
-                }
-            };
+            throw new FailureException('Transaction is dead');
         }
+
+        $this->transaction = $transaction;
+
+        $refCount = &$this->refCount;
+        $this->release = static function () use (&$refCount, $release) {
+            if (--$refCount === 0) {
+                $release();
+            }
+        };
     }
 
     public function __destruct()
@@ -78,7 +78,7 @@ abstract class PooledTransaction implements Transaction
         }
 
         try {
-            $this->transaction->commit();
+            $this->transaction->close();
             $this->transaction = null;
         } finally {
             ($this->release)();
@@ -97,9 +97,7 @@ abstract class PooledTransaction implements Transaction
         $result = $this->transaction->query($sql);
 
         if ($result instanceof ResultSet) {
-            $this->refCount++;
-
-            return new PooledResultSet($result, $this->release);
+            return $this->createResultSet($result, $this->release);
         }
 
         return $result;
@@ -117,9 +115,7 @@ abstract class PooledTransaction implements Transaction
         $result = $this->transaction->execute($sql, $params);
 
         if ($result instanceof ResultSet) {
-            $this->refCount++;
-
-            return new PooledResultSet($result, $this->release);
+            return $this->createResultSet($result, $this->release);
         }
 
         return $result;
@@ -232,5 +228,16 @@ abstract class PooledTransaction implements Transaction
         }
 
         return $this->transaction->releaseSavepoint($identifier);
+    }
+
+    protected function createResultSet(ResultSet $resultSet, Closure $release): ResultSet
+    {
+        if ($resultSet->isUnbuffered()) {
+            ++$this->refCount;
+
+            return new PooledResultSet($resultSet, $release);
+        }
+
+        return $resultSet;
     }
 }
