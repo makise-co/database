@@ -11,12 +11,12 @@ declare(strict_types=1);
 namespace MakiseCo\SqlCommon;
 
 use Closure;
+use MakiseCo\EvPrimitives\Timer;
 use MakiseCo\SqlCommon\Contracts\Link;
 use MakiseCo\SqlCommon\Contracts\ResultSet;
 use MakiseCo\SqlCommon\Contracts\Statement;
 use SplObjectStorage;
 use Swoole\Coroutine;
-use Swoole\Timer;
 use Throwable;
 
 use function time;
@@ -24,8 +24,6 @@ use function time;
 class StatementPool implements Statement
 {
     private DatabasePool $pool;
-
-    private string $query;
 
     /**
      * Points to $pool->pop();
@@ -47,17 +45,20 @@ class StatementPool implements Statement
      */
     private SplObjectStorage $statements;
 
-    private int $tid = 0;
+    private Timer $timer;
+
+    /**
+     * SQL to prepare
+     */
+    private string $query;
 
     public function __construct(
         DatabasePool $pool,
-        int $maxIdleTime,
-        float $validateInterval,
-        string $query,
-        Link $connection,
-        Statement $statement,
         Closure $pop,
-        Closure $push
+        Closure $push,
+        int $maxIdleTime,
+        float $validationInterval,
+        string $query
     ) {
         $this->pool = $pool;
         $this->maxIdleTime = $maxIdleTime;
@@ -66,22 +67,47 @@ class StatementPool implements Statement
         $this->push = $push;
 
         $this->statements = new SplObjectStorage();
-        $this->statements->attach($connection, $statement);
+        $this->timer = new Timer(
+            5000,
+            Closure::fromCallable([$this, 'validateStatements']),
+            false
+        );
 
-        if ($validateInterval > 0.0) {
-            $this->tid = Timer::tick(
-                (int)($validateInterval * 1000),
-                Closure::fromCallable([$this, 'validateStatements'])
-            );
+        if ($validationInterval > 0.0) {
+            $this->timer->setInterval((int)($validationInterval * 1000));
+            $this->timer->start();
         }
     }
 
     public function __destruct()
     {
-        if ($this->tid > 0) {
-            Timer::clear($this->tid);
+        if ($this->timer->isStarted()) {
+            $this->timer->stop();
+        }
+    }
 
-            $this->tid = 0;
+    public function setMaxIdleTime(int $maxIdleTime): void
+    {
+        if ($maxIdleTime < 0) {
+            $maxIdleTime = 0;
+        }
+
+        $this->maxIdleTime = $maxIdleTime;
+    }
+
+    public function setValidationInterval(float $validationInterval): void
+    {
+        if ($validationInterval < 0.0) {
+            if ($this->timer->isStarted()) {
+                $this->timer->start();
+            }
+
+            return;
+        }
+
+        $this->timer->setInterval((int)($validationInterval * 1000));
+        if (!$this->timer->isStarted()) {
+            $this->timer->start();
         }
     }
 

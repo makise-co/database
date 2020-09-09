@@ -11,20 +11,37 @@ declare(strict_types=1);
 namespace MakiseCo\SqlCommon;
 
 use Closure;
+use InvalidArgumentException;
 use MakiseCo\Connection\ConnectionConfigInterface;
 use MakiseCo\Connection\ConnectionInterface;
 use MakiseCo\Connection\ConnectorInterface;
+use MakiseCo\Pool\Pool;
 use MakiseCo\SqlCommon\Contracts\CommandResult;
 use MakiseCo\SqlCommon\Contracts\Link;
 use MakiseCo\SqlCommon\Contracts\ResultSet;
 use MakiseCo\SqlCommon\Contracts\Statement;
 use MakiseCo\SqlCommon\Contracts\Transaction;
-use MakiseCo\Pool\Pool;
 use Throwable;
-use InvalidArgumentException;
+
+use function array_key_exists;
+use function count;
+use function key;
+use function md5;
 
 abstract class DatabasePool extends Pool implements Link
 {
+    /**
+     * Free statement that has not been used the longest
+     * A more graceful way, but took more CPU time
+     */
+    public const STATEMENT_FREE_POLICY_MIN_USED_AT = 0;
+
+    /**
+     * Free first available statement
+     * A faster way, but does not respect statements lastUsedAt
+     */
+    public const STATEMENT_FREE_POLICY_RING = 1;
+
     /**
      * Points to $this->pop()
      */
@@ -37,13 +54,35 @@ abstract class DatabasePool extends Pool implements Link
 
     /**
      * The minimum amount of time (seconds) a statement may sit idle in the pool before it is eligible for closing.
+     * Zero value will disable idle statements closing.
      */
     private int $statementMaxIdleTime = 60;
 
     /**
-     * The number of milliseconds to sleep between runs of the idle statement validation/cleaner timer.
+     * The number of seconds to sleep between runs of the idle statement validation/cleaner timer.
+     * Zero value will disable statements checking. It is highly recommended to not disable statements checking
+     * to prevent memory leaks.
      */
-    private float $validationStatementsInterval = 5.0;
+    private float $validationStatementsInterval = 30.0;
+
+    /**
+     * The maximum number of active statements that can be allocated from this pool at the same time
+     * Zero value = no limit
+     */
+    private int $maxStatements = 0;
+
+    /**
+     * Statement pools
+     * One pool represents one statement
+     *
+     * @var StatementPool[]|array<string, StatementPool>
+     */
+    private array $statements = [];
+
+    /**
+     * Statements free policy that determines which statement should be freed when statements limit has been reached
+     */
+    private int $statementLimitFreePolicy = self::STATEMENT_FREE_POLICY_RING;
 
     public function __construct(ConnectionConfigInterface $connConfig, ?ConnectorInterface $connector = null)
     {
@@ -54,6 +93,13 @@ abstract class DatabasePool extends Pool implements Link
     }
 
     abstract protected function createTransaction(Transaction $transaction, Closure $release): Transaction;
+
+    public function close(): void
+    {
+        parent::close();
+
+        $this->statements = [];
+    }
 
     public function getStatementMaxIdleTime(): int
     {
@@ -73,6 +119,10 @@ abstract class DatabasePool extends Pool implements Link
     public function setStatementMaxIdleTime(int $statementMaxIdleTime): void
     {
         $this->statementMaxIdleTime = $statementMaxIdleTime;
+
+        foreach ($this->statements as $stmtPool) {
+            $stmtPool->setMaxIdleTime($statementMaxIdleTime);
+        }
     }
 
     /**
@@ -93,6 +143,41 @@ abstract class DatabasePool extends Pool implements Link
         }
 
         $this->validationStatementsInterval = $validationStatementsInterval;
+
+        foreach ($this->statements as $stmtPool) {
+            $stmtPool->setValidationInterval($validationStatementsInterval);
+        }
+    }
+
+    /**
+     * Set the maximum number of active statements that can be allocated from this pool at the same time
+     * Zero value = no limit
+     *
+     * @param int $maxStatements
+     */
+    public function setMaxStatements(int $maxStatements): void
+    {
+        if ($maxStatements < 0) {
+            throw new InvalidArgumentException('maxStatements should be a positive value');
+        }
+
+        $this->maxStatements = $maxStatements;
+    }
+
+    /**
+     * Set the statements free policy that determines which statement
+     * should be freed when statements limit has been reached
+     *
+     * @param int $freePolicy
+     */
+    public function setStatementLimitFreePolicy(int $freePolicy): void
+    {
+        if ($freePolicy !== self::STATEMENT_FREE_POLICY_MIN_USED_AT &&
+            $freePolicy !== self::STATEMENT_FREE_POLICY_RING) {
+            throw new InvalidArgumentException('freePolicy should be a one of STATEMENT_FREE_POLICY_* constants');
+        }
+
+        $this->statementLimitFreePolicy = $freePolicy;
     }
 
     public function query(string $sql)
@@ -112,24 +197,32 @@ abstract class DatabasePool extends Pool implements Link
 
     public function prepare(string $sql): Statement
     {
-        $connection = $this->pop();
+        $key = md5($sql);
+        if (!array_key_exists($key, $this->statements)) {
+            // statements limit reached
+            if ($this->maxStatements > 0 && count($this->statements) > $this->maxStatements) {
+                $stmtKey = $this->getStatementKeyForFree();
+                unset($this->statements[$stmtKey]);
+            }
 
-        try {
-            $statement = $connection->prepare($sql);
-        } finally {
-            $this->push($connection);
+            $stmtPool = new StatementPool(
+                $this,
+                $this->pop,
+                $this->push,
+                $this->statementMaxIdleTime,
+                $this->validationStatementsInterval,
+                $sql
+            );
+
+            $this->statements[$key] = $stmtPool;
+        } else {
+            $stmtPool = $this->statements[$key];
         }
 
-        return new StatementPool(
-            $this,
-            $this->statementMaxIdleTime,
-            $this->validationStatementsInterval,
-            $sql,
-            $connection,
-            $statement,
-            $this->pop,
-            $this->push
-        );
+        return $stmtPool;
+//        return new PooledStatement($stmtPool, static function () {
+//            // nothing to do
+//        });
     }
 
     public function execute(string $sql, array $params = [])
@@ -188,5 +281,38 @@ abstract class DatabasePool extends Pool implements Link
         /** @noinspection PhpIncompatibleReturnTypeInspection */
         /** @var Link */
         return parent::pop();
+    }
+
+    protected function getStatementKeyForFree(): string
+    {
+        if ($this->statementLimitFreePolicy === self::STATEMENT_FREE_POLICY_MIN_USED_AT) {
+            $minUsedAt = 0;
+            $minUsedAtKey = null;
+
+            // find statement that wasn't used for a long time
+            foreach ($this->statements as $key => $stmt) {
+                if ($minUsedAt === 0) {
+                    $minUsedAt = $stmt->getLastUsedAt();
+                    $minUsedAtKey = $key;
+
+                    continue;
+                }
+
+                if (($stmtUsedAt = $stmt->getLastUsedAt()) < $minUsedAt) {
+                    $minUsedAt = $stmtUsedAt;
+                    $minUsedAtKey = $key;
+                }
+            }
+
+            // impossible condition, but for type safety default null to empty string
+            if (null === $minUsedAtKey) {
+                return '';
+            }
+
+            return $minUsedAtKey;
+        }
+
+        // ring policy or when policy is unknown
+        return key($this->statements) ?? '';
     }
 }

@@ -22,6 +22,11 @@
             "MakiseCo\\SqlCommon\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "MakiseCo\\SqlCommon\\Tests\\": "tests/"
+        }
+    },
     "require-dev": {
         "swoole/ide-helper": "^4.5",
         "phpstan/phpstan": "^0.12.40",
