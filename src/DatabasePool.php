@@ -197,29 +197,43 @@ abstract class DatabasePool extends Pool implements Link
 
     public function prepare(string $sql): Statement
     {
-        $key = md5($sql);
-        if (!array_key_exists($key, $this->statements)) {
-            // statements limit reached
-            if ($this->maxStatements > 0 && count($this->statements) > $this->maxStatements) {
-                $stmtKey = $this->getStatementKeyForFree();
-                unset($this->statements[$stmtKey]);
-            }
+        $connection = $this->pop();
 
-            $stmtPool = new StatementPool(
-                $this,
-                $this->pop,
-                $this->push,
-                $this->statementMaxIdleTime,
-                $this->validationStatementsInterval,
-                $sql
-            );
+        try {
+            $stmt = $connection->prepare($sql);
+        } catch (Throwable $e) {
+            $this->push($connection);
 
-            $this->statements[$key] = $stmtPool;
-        } else {
-            $stmtPool = $this->statements[$key];
+            throw $e;
         }
 
-        return $stmtPool;
+        return new PooledStatement($stmt, function () use ($connection) {
+            $this->push($connection);
+        });
+
+//        $key = md5($sql);
+//        if (!array_key_exists($key, $this->statements)) {
+//            // statements limit reached
+//            if ($this->maxStatements > 0 && count($this->statements) > $this->maxStatements) {
+//                $stmtKey = $this->getStatementKeyForFree();
+//                unset($this->statements[$stmtKey]);
+//            }
+//
+//            $stmtPool = new StatementPool(
+//                $this,
+//                $this->pop,
+//                $this->push,
+//                $this->statementMaxIdleTime,
+//                $this->validationStatementsInterval,
+//                $sql
+//            );
+//
+//            $this->statements[$key] = $stmtPool;
+//        } else {
+//            $stmtPool = $this->statements[$key];
+//        }
+//
+//        return $stmtPool;
 //        return new PooledStatement($stmtPool, static function () {
 //            // nothing to do
 //        });

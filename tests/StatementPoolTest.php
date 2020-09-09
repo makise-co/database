@@ -11,7 +11,7 @@ declare(strict_types=1);
 namespace MakiseCo\SqlCommon\Tests;
 
 use MakiseCo\SqlCommon\DatabasePool;
-use MakiseCo\SqlCommon\StatementPool;
+use MakiseCo\SqlCommon\PooledStatement;
 use MakiseCo\SqlCommon\Tests\Stub\ConnectionConfig;
 use MakiseCo\SqlCommon\Tests\Stub\Pool;
 use Swoole\Coroutine;
@@ -36,7 +36,7 @@ class StatementPoolTest extends CoroTestCase
         Coroutine::sleep(0.010);
 
         $statementPool = $this->pool->prepare('SELECT 1');
-        self::assertInstanceOf(StatementPool::class, $statementPool);
+        self::assertInstanceOf(PooledStatement::class, $statementPool);
 
         // TODO: Write tests
     }

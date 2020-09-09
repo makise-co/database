@@ -51,9 +51,7 @@ final class PooledStatement implements Statement
 
     public function __destruct()
     {
-        if ($this->release !== null) {
-            ($this->release)();
-        }
+        ($this->release)();
     }
 
     /**
